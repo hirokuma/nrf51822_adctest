@@ -3,6 +3,7 @@ SDK_PATH = ../../../../..
 PRJ_PATH = ../../..
 BOARD_NAME = BOARD_CUSTOM
 NRF51_TYPE = s110_xxaa
+OUTPUT_FILENAME = nrf51822_xxac_s110
 
 export OUTPUT_FILENAME
 #MAKEFILE_NAME := $(CURDIR)/$(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST))
@@ -161,7 +162,6 @@ vpath %.s $(ASM_PATHS)
 
 OBJECTS = $(C_OBJECTS) $(ASM_OBJECTS)
 
-nrf51822_xxac_s110: OUTPUT_FILENAME := nrf51822_xxac_s110
 nrf51822_xxac_s110: LINKER_SCRIPT=bluetoothds_gcc_nrf51.ld
 nrf51822_xxac_s110: $(BUILD_DIRECTORIES) $(OBJECTS)
 	@echo Linking target: $(OUTPUT_FILENAME).out
@@ -222,11 +222,11 @@ clean:
 cleanobj:
 	$(RM) $(BUILD_DIRECTORIES)/*.o
 
-flash: $(MAKECMDGOALS)
-	@echo Flashing: $(OUTPUT_BINARY_DIRECTORY)/$<.hex
-	nrfjprog --reset --program $(OUTPUT_BINARY_DIRECTORY)/$<.hex
+flash:
+	@echo Flashing: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex
+	nrfjprog --program $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex
 
 ## Flash softdevice
 flash_softdevice: 
 	@echo Flashing: s110_softdevice.hex
-	nrfjprog --reset --program $(SDK_PATH)/components/softdevice/s110/hex/s110_softdevice.hex
+	nrfjprog --program $(SDK_PATH)/components/softdevice/s110/hex/s110_softdevice.hex

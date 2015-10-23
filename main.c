@@ -46,6 +46,7 @@
 #include "bsp.h"
 #include "bsp_btn_ble.h"
 #include "ble_adconvert_service.h"
+#include "service_if.h"
 
 #define IS_SRVC_CHANGED_CHARACT_PRESENT  1                                          /**< Include or not the service_changed characteristic. if not enabled, the server's database cannot be changed for the lifetime of the device*/
 
@@ -58,7 +59,7 @@
 #define APP_TIMER_MAX_TIMERS             (6+BSP_APP_TIMERS_NUMBER+1)                /**< Maximum number of simultaneously created timers. */
 #define APP_TIMER_OP_QUEUE_SIZE          4                                          /**< Size of timer operation queues. */
 
-#define APP_TIMER_ADC_INTERVAL           APP_TIMER_TICKS(10000, APP_TIMER_PRESCALER) /**< ADC interval (ticks). */
+#define APP_TIMER_ADC_INTERVAL           APP_TIMER_TICKS(ADC_PERIOD, APP_TIMER_PRESCALER) /**< ADC interval (ticks). */
 
 
 #define MIN_CONN_INTERVAL                MSEC_TO_UNITS(100, UNIT_1_25_MS)           /**< Minimum acceptable connection interval (0.1 seconds). */
@@ -81,17 +82,33 @@
 
 //#define APPL_LOG app_trace_log
 
+#define ADC_THRESHOLD                   (600)                                       /**< LEDを点灯する閾値 */
+#define ADC_PERIOD                      (5000)                                      /**< ADCを行う周期[msec] */
 
 static dm_application_instance_t            m_app_handle;                           /**< Application identifier allocated by device manager */
 
 static uint16_t                             m_conn_handle = BLE_CONN_HANDLE_INVALID;   /**< Handle of the current connection. */
 
 static app_timer_id_t                       m_app_timer_id;                         /**< [TIMER]ADC */
-static ble_adconvert_service_t              m_adconv;
+//static ble_adconvert_service_t              m_adconv;
 static volatile uint16_t                    m_adc_value;
 
 // YOUR_JOB: Use UUIDs for service(s) used in your application.
 static ble_uuid_t m_adv_uuids[] = {{BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}}; /**< Universally unique service identifiers. */
+
+
+/**@brief Function for handling an error.
+ *
+ * @param[in] error_code  Error code supplied to the handler.
+ * @param[in] line_num    Line number where the error occurred.
+ * @param[in] p_file_name Pointer to the file name.
+ */
+void app_error_handler(uint32_t error_code, uint32_t line_num, const uint8_t * p_file_name)
+{
+    for (;;) {
+        __WFI();
+    }
+}
 
 
 /**@brief Callback function for asserts in the SoftDevice.
@@ -170,6 +187,7 @@ static void gap_params_init(void)
 }
 
 
+#if 0
 /**@brief Function for handling the YYY Service events.
  * YOUR_JOB implement a service handler function depending on the event the service you are using can generate
  *
@@ -190,11 +208,15 @@ static void on_ble_service_evt(ble_adconvert_service_t * p_service,
             break;
     }
 }
+#endif
 
 /**@brief Function for initializing services that will be used by the application.
  */
 static void services_init(void)
 {
+#if 1
+    bluetooth_init();
+#else
     /* YOUR_JOB: Add code to initialize the services used by the application.*/
     uint32_t                            err_code;
     ble_adconvert_service_init_t        init;
@@ -205,6 +227,7 @@ static void services_init(void)
     init.ble_adconvert_service_advalue_initial_value.advalue = 0;
     err_code = ble_adconvert_service_init(&m_adconv, &init);
     APP_ERROR_CHECK(err_code);
+#endif
 }
 
 
@@ -355,7 +378,7 @@ static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
     bsp_btn_ble_on_ble_evt(p_ble_evt);
     ble_advertising_on_ble_evt(p_ble_evt);
     on_ble_evt(p_ble_evt);
-    ble_adconvert_service_on_ble_evt(&m_adconv, p_ble_evt);
+    bluetooth_on_ble_evt(p_ble_evt);
 }
 
 
@@ -547,21 +570,17 @@ static void buttons_leds_init(bool * p_erase_bonds)
  */
 void ADC_IRQHandler(void)
 {
-    uint32_t err_code;
-    ble_adconvert_service_advalue_t value;
 
     nrf_adc_conversion_event_clean();
 
     m_adc_value = (uint16_t)nrf_adc_result_get();
-    if (m_adc_value > 600) {
-        nrf_gpio_pin_clear(BSP_LED_2);
-    }
-    else {
-        nrf_gpio_pin_set(BSP_LED_2);
-    }
-    value.advalue = m_adc_value;
-    err_code = ble_adconvert_service_advalue_send(&m_adconv, &value);
-    APP_ERROR_CHECK(err_code);
+//    if (m_adc_value >= ADC_THRESHOLD) {
+//        nrf_gpio_pin_clear(BSP_LED_2);
+//    }
+//    else {
+//        nrf_gpio_pin_set(BSP_LED_2);
+//    }
+    bluetooth_adc_send(m_adc_value);
 }
 
 
@@ -574,7 +593,7 @@ static void adc_config(void)
 
     // Initialize and configure ADC
     nrf_adc_configure( (nrf_adc_config_t *)&nrf_adc_config);
-    nrf_adc_input_select(NRF_ADC_CONFIG_INPUT_3);
+    nrf_adc_input_select(NRF_ADC_CONFIG_INPUT_5);
     nrf_adc_int_enable(ADC_INTENSET_END_Enabled << ADC_INTENSET_END_Pos);
     NVIC_SetPriority(ADC_IRQn, NRF_APP_PRIORITY_LOW);
     NVIC_EnableIRQ(ADC_IRQn);

@@ -31,6 +31,8 @@ uint32_t bluetooth_init(void);
  */
 void bluetooth_on_ble_evt(ble_evt_t * p_ble_evt);
 
+void bluetooth_adc_send(uint16_t adc);
+
 #endif // BLE_DS_IF_H__
 
 /** @} */

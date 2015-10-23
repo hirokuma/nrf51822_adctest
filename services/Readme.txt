@@ -3,7 +3,7 @@ Readme for Nordic Semiconductor plugin for Bluetooth Developer Studio (BDS)
 
 The contents of this file are applicable to the following software versions:
 * Bluetooth Developer Studio:       v1.0.1478.0 (Beta 2) or newer
-* Nordic Semiconductor BDS Plugin:  v1.1.6
+* Nordic Semiconductor BDS Plugin:  v1.1.7
 * Nordic Semiconductor SDK:         v9.0.0
 
 
