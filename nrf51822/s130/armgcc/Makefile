@@ -1,11 +1,9 @@
-PROJECT_NAME := bluetoothds_s110
+PROJECT_NAME := adc_s130
 SDK_PATH = ../../../../..
 PRJ_PATH = ../../..
 BOARD_NAME = BOARD_BVMCN5102
 #BOARD_NAME = BOARD_BLENANO
-SD_TYPE = s110
-NRF51_TYPE = $(SD_TYPE)_xxaa
-OUTPUT_FILENAME = nrf51822_$(SD_TYPE)
+OUTPUT_FILENAME = nrf51822_s130
 NRF51_DEBUG = 1
 #NRF51_DEBUG = 0
 NRF51_DEBUG_UART = 0
@@ -117,7 +115,7 @@ INC_PATHS += -I$(SDK_PATH)/components/toolchain
 INC_PATHS += -I$(SDK_PATH)/components/ble/common
 INC_PATHS += -I$(SDK_PATH)/components/ble/ble_advertising
 INC_PATHS += -I$(SDK_PATH)/components/ble/device_manager
-INC_PATHS += -I$(SDK_PATH)/components/softdevice/$(SD_TYPE)/headers
+INC_PATHS += -I$(SDK_PATH)/components/softdevice/s130/headers_v2
 INC_PATHS += -I$(SDK_PATH)/components/softdevice/common/softdevice_handler
 INC_PATHS += -I$(SDK_PATH)/components/device
 INC_PATHS += -I$(SDK_PATH)/examples/bsp
@@ -133,10 +131,10 @@ BUILD_DIRECTORIES := $(sort $(OBJECT_DIRECTORY) $(OUTPUT_BINARY_DIRECTORY) $(LIS
 CFLAGS  = -D$(BOARD_NAME)
 CFLAGS += -DSOFTDEVICE_PRESENT
 CFLAGS += -DNRF51
-CFLAGS += -DS110
+CFLAGS += -DS130
 CFLAGS += -DBLE_STACK_SUPPORT_REQD
 CFLAGS += -DSWI_DISABLE0
-CFLAGS += -Wall -Werror
+CFLAGS += -Wall
 
 ifeq ($(NRF51_DEBUG_RTT),1)
 CFLAGS += -DNRF51_DEBUG_RTT
@@ -172,20 +170,20 @@ ASMFLAGS += -D$(BOARD_NAME)
 ASMFLAGS += -DSWI_DISABLE0
 ASMFLAGS += -DSOFTDEVICE_PRESENT
 ASMFLAGS += -DNRF51
-ASMFLAGS += -DS110
+ASMFLAGS += -DS130
 ASMFLAGS += -DBLE_STACK_SUPPORT_REQD
 #default target - first one defined
-default: nrf51822_s110
+default: nrf51822_s130
 
 #building all targets
 all: clean
 	$(NO_ECHO)$(MAKE) -f $(MAKEFILE_NAME) -C $(MAKEFILE_DIR) -e cleanobj
-	$(NO_ECHO)$(MAKE) -f $(MAKEFILE_NAME) -C $(MAKEFILE_DIR) -e nrf51822_s110
+	$(NO_ECHO)$(MAKE) -f $(MAKEFILE_NAME) -C $(MAKEFILE_DIR) -e nrf51822_s130
 
 #target for printing all targets
 help:
 	@echo following targets are available:
-	@echo 	nrf51822_s110
+	@echo 	nrf51822_s130
 	@echo 	flash_softdevice
 
 
@@ -202,8 +200,8 @@ vpath %.s $(ASM_PATHS)
 
 OBJECTS = $(C_OBJECTS) $(ASM_OBJECTS)
 
-nrf51822_s110: LINKER_SCRIPT=bluetoothds_gcc_nrf51.ld
-nrf51822_s110: $(BUILD_DIRECTORIES) $(OBJECTS)
+nrf51822_s130: LINKER_SCRIPT=s130_gcc_nrf51.ld
+nrf51822_s130: $(BUILD_DIRECTORIES) $(OBJECTS)
 	$(NO_ECHO)$(CC) $(LDFLAGS) $(OBJECTS) $(LIBS) -o $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out
 	$(NO_ECHO)$(MAKE) -f $(MAKEFILE_NAME) -C $(MAKEFILE_DIR) -e finalize
 
@@ -270,7 +268,3 @@ flash:
 	@echo Flashing: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex
 	nrfjprog --program $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex
 
-## Flash softdevice
-flash_softdevice: 
-	@echo Flashing: s110_softdevice.hex
-	nrfjprog --program $(SDK_PATH)/components/softdevice/s110/hex/s110_softdevice.hex

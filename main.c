@@ -47,6 +47,13 @@
 #include "bsp_btn_ble.h"
 #include "ble_adconvert_service.h"
 #include "service_if.h"
+#ifdef ENABLE_DEBUG_LOG_SUPPORT
+#include "app_uart.h"
+#endif  //ENABLE_DEBUG_LOG_SUPPORT
+
+#ifdef NRF51_DEBUG_RTT
+#include "SEGGER_RTT.h"
+#endif  //NRF51_DEBUG_RTT
 
 #define IS_SRVC_CHANGED_CHARACT_PRESENT  1                                          /**< Include or not the service_changed characteristic. if not enabled, the server's database cannot be changed for the lifetime of the device*/
 
@@ -56,7 +63,7 @@
 #define APP_ADV_TIMEOUT_IN_SECONDS       180                                        /**< The advertising timeout in units of seconds. */
 
 #define APP_TIMER_PRESCALER              0                                          /**< Value of the RTC1 PRESCALER register. */
-#define APP_TIMER_MAX_TIMERS             (6+BSP_APP_TIMERS_NUMBER+1)                /**< Maximum number of simultaneously created timers. */
+//#define APP_TIMER_MAX_TIMERS             (6+BSP_APP_TIMERS_NUMBER+1)                /**< Maximum number of simultaneously created timers. */
 #define APP_TIMER_OP_QUEUE_SIZE          4                                          /**< Size of timer operation queues. */
 
 #define APP_TIMER_ADC_INTERVAL           APP_TIMER_TICKS(ADC_PERIOD, APP_TIMER_PRESCALER) /**< ADC interval (ticks). */
@@ -80,16 +87,23 @@
 
 #define DEAD_BEEF                        0xDEADBEEF                                 /**< Value used as error code on stack dump, can be used to identify stack location on stack unwind. */
 
-//#define APPL_LOG app_trace_log
+#if defined(ENABLE_DEBUG_LOG_SUPPORT)
+#define APPL_LOG app_trace_log
+#elif defined(NRF51_DEBUG_RTT)
+#define APPL_LOG(...) SEGGER_RTT_printf(0, __VA_ARGS__)
+#else
+#define APPL_LOG
+#endif
 
 #define ADC_THRESHOLD                   (600)                                       /**< LEDを点灯する閾値 */
 #define ADC_PERIOD                      (5000)                                      /**< ADCを行う周期[msec] */
 
+static uint8_t                              m_ble_buf[BLE_GATTS_ATTR_TAB_SIZE_MIN];
 static dm_application_instance_t            m_app_handle;                           /**< Application identifier allocated by device manager */
 
 static uint16_t                             m_conn_handle = BLE_CONN_HANDLE_INVALID;   /**< Handle of the current connection. */
 
-static app_timer_id_t                       m_app_timer_id;                         /**< [TIMER]ADC */
+APP_TIMER_DEF(m_app_timer_id);                                  /**< [TIMER]ADC */
 //static ble_adconvert_service_t              m_adconv;
 static volatile uint16_t                    m_adc_value;
 
@@ -110,6 +124,12 @@ void app_error_handler(uint32_t error_code, uint32_t line_num, const uint8_t * p
     }
 }
 
+#ifdef ENABLE_DEBUG_LOG_SUPPORT
+void uart_error_handle(app_uart_evt_t * p_event)
+{
+    //do nothing
+}
+#endif  //ENABLE_DEBUG_LOG_SUPPORT
 
 /**@brief Callback function for asserts in the SoftDevice.
  *
@@ -145,7 +165,7 @@ static void timers_init(void)
     uint32_t err_code;
 
     // Initialize timer module.
-    APP_TIMER_INIT(APP_TIMER_PRESCALER, APP_TIMER_MAX_TIMERS, APP_TIMER_OP_QUEUE_SIZE, false);
+    APP_TIMER_INIT(APP_TIMER_PRESCALER, APP_TIMER_OP_QUEUE_SIZE, false);
 
     // Create timers.
     err_code = app_timer_create(&m_app_timer_id, APP_TIMER_MODE_REPEATED, timer_timeout_handler);
@@ -341,20 +361,22 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
     switch (p_ble_evt->header.evt_id)
             {
         case BLE_GAP_EVT_CONNECTED:
+            APPL_LOG("BLE_GAP_EVT_CONNECTED : %u\n", p_ble_evt->header.evt_id);
             err_code = bsp_indication_set(BSP_INDICATE_CONNECTED);
             APP_ERROR_CHECK(err_code);
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
 
-            err_code = app_timer_start(m_app_timer_id, APP_TIMER_ADC_INTERVAL, NULL);
-            APP_ERROR_CHECK(err_code);
+            //err_code = app_timer_start(m_app_timer_id, APP_TIMER_ADC_INTERVAL, NULL);
+            //APP_ERROR_CHECK(err_code);
             err_code = sd_ble_gatts_sys_attr_set(m_conn_handle, NULL, 0, 0);
             APP_ERROR_CHECK(err_code);
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
+            APPL_LOG("BLE_GAP_EVT_DISCONNECTED : %u\n", p_ble_evt->header.evt_id);
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
-            nrf_adc_stop();
-            app_timer_stop(m_app_timer_id);
+            //nrf_adc_stop();
+            //app_timer_stop(m_app_timer_id);
             break;
 
         default:
@@ -405,17 +427,24 @@ static void ble_stack_init(void)
     uint32_t err_code;
 
     // Initialize the SoftDevice handler module.
-    SOFTDEVICE_HANDLER_INIT(NRF_CLOCK_LFCLKSRC_RC_250_PPM_4000MS_CALIBRATION, NULL);
+    SOFTDEVICE_HANDLER_INIT(NRF_CLOCK_LFCLKSRC, NULL);
 
 #if defined(S110) || defined(S130)
     // Enable BLE stack.
     ble_enable_params_t ble_enable_params;
     memset(&ble_enable_params, 0, sizeof(ble_enable_params));
 #ifdef S130
-    ble_enable_params.gatts_enable_params.attr_tab_size   = BLE_GATTS_ATTR_TAB_SIZE_DEFAULT;
+    ble_enable_params.gatts_enable_params.attr_tab_size   = BLE_GATTS_ATTR_TAB_SIZE_MIN;
+    ble_enable_params.gap_enable_params.periph_conn_count = 1;
 #endif
     ble_enable_params.gatts_enable_params.service_changed = IS_SRVC_CHANGED_CHARACT_PRESENT;
+#ifdef S130
+    uint32_t app_ram_base = (uint32_t)m_ble_buf;
+    err_code = sd_ble_enable(&ble_enable_params, &app_ram_base);
+    APPL_LOG("app_ram_base : %x\n", app_ram_base);
+#else
     err_code = sd_ble_enable(&ble_enable_params);
+#endif
     APP_ERROR_CHECK(err_code);
 #endif
 
@@ -593,7 +622,13 @@ static void adc_config(void)
 
     // Initialize and configure ADC
     nrf_adc_configure( (nrf_adc_config_t *)&nrf_adc_config);
+#if defined(BOARD_BVMCN5102)
+    nrf_adc_input_select(NRF_ADC_CONFIG_INPUT_3);
+#elif defined(BOARD_BLENANO)
     nrf_adc_input_select(NRF_ADC_CONFIG_INPUT_5);
+#else
+#   error unknown board
+#endif
     nrf_adc_int_enable(ADC_INTENSET_END_Enabled << ADC_INTENSET_END_Pos);
     NVIC_SetPriority(ADC_IRQn, NRF_APP_PRIORITY_LOW);
     NVIC_EnableIRQ(ADC_IRQn);
@@ -616,6 +651,12 @@ int main(void)
     uint32_t err_code;
     bool erase_bonds;
 
+#ifdef ENABLE_DEBUG_LOG_SUPPORT
+    app_trace_init();
+#endif
+
+    APPL_LOG("START\r\n");
+
     // Initialize.
     timers_init();
     buttons_leds_init(&erase_bonds);
@@ -630,6 +671,7 @@ int main(void)
     // Start execution.
     err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);
+    APPL_LOG("start advertising : %u\n", err_code);
 
     // Enter main loop.
     for (;;)
