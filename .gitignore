@@ -33,3 +33,4 @@
 
 # Bfuild files
 _build/
+nrf51822/s110/armgcc/adlint
